@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  erebus-space-cloud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: erebus-space-cloud-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - REDIS_URL=redis://erebus-redis:6379
+      - EREBUS_DATA_CENTER_NAME=EREBUS-CORE-01
+      - ORBITAL_ALTITUDE_KM=420
+    depends_on:
+      erebus-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - erebus-orbital-net
+    volumes:
+      - erebus-data:/app/data
+
+  erebus-redis:
+    image: redis:7-alpine
+    container_name: erebus-redis-cache
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - erebus-orbital-net
+    volumes:
+      - redis-data:/data
+
+networks:
+  erebus-orbital-net:
+    driver: bridge
+
+volumes:
+  erebus-data:
+  redis-data:

@@ -1,0 +1,15 @@
+Dockerfile
+docker-compose*.yml
+.dockerignore
+.git
+.gitignore
+.next
+node_modules
+npm-debug.log
+README.md
+.env*.local
+.vscode
+.idea
+brain
+scratch
+pnpm-debug.log
