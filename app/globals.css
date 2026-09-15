@@ -221,7 +221,7 @@ button {
 }
 
 .voyager-submit-pill {
-  background: #059669;
+  background: #000000;
   color: #ffffff;
   font-weight: 700;
   font-size: 17px;
@@ -232,12 +232,12 @@ button {
   cursor: pointer;
   width: 100%;
   margin-top: 16px;
-  box-shadow: 0 10px 28px rgba(5, 150, 105, 0.3);
+  box-shadow: 0 10px 28px rgba(8, 8, 8, 0.3);
   transition: transform 0.15s ease, background-color 0.2s ease;
 }
 
 .voyager-submit-pill:hover {
-  background: #047857;
+  background: #2c2c2c;
   transform: translateY(-1px);
 }
 
