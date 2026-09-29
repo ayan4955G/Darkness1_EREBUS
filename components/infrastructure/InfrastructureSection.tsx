@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Plus, RefreshCw, Terminal } from 'lucide-react'
+import { Cpu, MapPin, Plus, RefreshCw, Terminal } from 'lucide-react'
 import { RocketMachine } from '@/lib/types'
 
 interface InfrastructureSectionProps {
@@ -17,6 +17,9 @@ export default function InfrastructureSection({
   onRefresh,
   onConnectMachine,
 }: InfrastructureSectionProps) {
+  const statusClassName = (status: RocketMachine['status']) =>
+    `infrastructure-status infrastructure-status--${status.toLowerCase().replace(/\s+/g, '-')}`
+
   return (
     <>
       <div className="view-header">
@@ -37,57 +40,62 @@ export default function InfrastructureSection({
           </button>
         </div>
 
-        <div className="rocket-cards-grid">
-          {machines.map((m) => {
-            const isDarkness1 = m.name.toUpperCase().includes('DARKNESS')
-            return (
-              <div className="rocket-card" key={m.id}>
-                <div className="rocket-card-visual">
-                  <div className="rocket-card-tags">
-                    <span className="rocket-tag-pill">{m.region}</span>
-                    {isDarkness1 && (
-                      <span className="rocket-tag-pill" style={{ background: '#2563eb' }}>
-                        Vanguard
+        <div className="infrastructure-table-wrap">
+          <table className="infrastructure-table">
+            <thead>
+              <tr>
+                <th>Instance</th>
+                <th>Mission</th>
+                <th>Region</th>
+                <th>Compute</th>
+                <th>Network endpoint</th>
+                <th>Status</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {machines.map((machine) => (
+                <tr key={machine.id}>
+                  <td data-label="Instance">
+                    <div className="instance-identity">
+                      <span className="instance-mark" aria-hidden="true">
+                        <Cpu size={17} />
                       </span>
-                    )}
-                  </div>
-                  <div className="rocket-card-rating">★ {isDarkness1 ? '4.9' : '4.8'}</div>
-                  <img src="/rocket.png" alt={m.name} className="rocket-card-img" />
-                </div>
-
-                <div className="rocket-card-body">
-                  <div className="rocket-card-header">
-                    <h3 className="rocket-card-name">{m.name}</h3>
-                    <span className="rocket-status-badge">
-                      {isDarkness1 ? 'Top Rated' : m.status}
-                    </span>
-                  </div>
-
-                  <p className="rocket-card-desc">
-                    {isDarkness1
-                      ? 'Flagship suborbital high-altitude compute payload. Radiation-shielded NVMe array with quantum laser uplink.'
-                      : m.mission}
-                  </p>
-
-                  <div className="rocket-specs-row">
-                    <span>{m.cpu}</span>
-                    <span>•</span>
-                    <span>{m.memory}</span>
-                    <span>•</span>
-                    <span style={{ fontFamily: 'monospace' }}>{m.ip}</span>
-                  </div>
-
-                  <button
-                    className="rocket-card-connect-btn"
-                    onClick={() => onConnectMachine(m)}
-                    type="button"
-                  >
-                    <Terminal style={{ width: 15 }} /> Connect to {m.name}
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+                      <div>
+                        <strong>{machine.name}</strong>
+                        <span>{machine.image}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td data-label="Mission" className="infrastructure-mission">{machine.mission}</td>
+                  <td data-label="Region">
+                    <span className="region-value"><MapPin size={15} />{machine.region}</span>
+                  </td>
+                  <td data-label="Compute">
+                    <div className="compute-value">
+                      <strong>{machine.cpu}</strong>
+                      <span>{machine.memory}</span>
+                    </div>
+                  </td>
+                  <td data-label="Network endpoint"><code>{machine.ip}</code></td>
+                  <td data-label="Status"><span className={statusClassName(machine.status)}>{machine.status}</span></td>
+                  <td className="infrastructure-action-cell">
+                    <button
+                      className="infrastructure-connect-btn"
+                      onClick={() => onConnectMachine(machine)}
+                      type="button"
+                    >
+                      <Terminal size={15} />
+                      <span>Connect</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {machines.length === 0 && (
+            <p className="infrastructure-empty-state">No active instances yet. Launch one to begin.</p>
+          )}
         </div>
       </div>
     </>

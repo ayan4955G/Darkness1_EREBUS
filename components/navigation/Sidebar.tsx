@@ -40,16 +40,16 @@ export default function Sidebar({
       badge: machinesCount,
     },
     {
-      label: 'Telemetry & Analytics',
-      path: '/telemetry',
-      section: 'Telemetry',
-      icon: Activity,
-    },
-    {
       label: 'Mission Operations',
       path: '/operations',
       section: 'Operations',
       icon: Terminal,
+    },
+    {
+      label: 'Telemetry & Analytics',
+      path: '/telemetry',
+      section: 'Telemetry',
+      icon: Activity,
     },
     {
       label: 'Cloud Storage',

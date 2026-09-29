@@ -19,6 +19,19 @@ interface OverviewSectionProps {
   machines: RocketMachine[]
 }
 
+function CapacityPieChart({ label, value, detail, color }: { label: string; value: number; detail: string; color: string }) {
+  return <div className="capacity-pie-chart">
+    <div className="capacity-pie-visual">
+      <svg viewBox="0 0 42 42" role="img" aria-label={`${label}: ${value}% allocated`}>
+        <circle className="capacity-pie-track" cx="21" cy="21" r="15.9155" fill="none" strokeWidth="5" />
+        <circle className="capacity-pie-value" cx="21" cy="21" r="15.9155" fill="none" stroke={color} strokeWidth="5" pathLength="100" strokeDasharray={`${value} ${100 - value}`} strokeLinecap="round" transform="rotate(-90 21 21)" />
+      </svg>
+      <strong>{value}%</strong>
+    </div>
+    <div><h4>{label}</h4><p>{detail}</p></div>
+  </div>
+}
+
 export default function OverviewSection({ machines }: OverviewSectionProps) {
   return (
     <>
@@ -159,48 +172,17 @@ export default function OverviewSection({ machines }: OverviewSectionProps) {
           </div>
         </div>
 
-        {/* RIGHT CARD: RESOURCE ALLOCATION & CAPACITY (Replaces Gross Volume) */}
+        {/* RIGHT CARD: RESOURCE ALLOCATION & CAPACITY */}
         <div className="capacity-card">
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#0f172a' }}>
-                Resource Capacity
-              </h3>
-              <Cpu style={{ width: 18, color: '#2563eb' }} />
-            </div>
-            <div className="big-stat-number">128.4 TFLOPS</div>
-            <span style={{ fontSize: 12, color: '#64748b' }}>Active Compute Cluster Output</span>
+          <div className="capacity-card-heading">
+            <div><h3>Resource Capacity</h3><p>Live allocation across the active cluster</p></div>
+            <Cpu style={{ width: 18, color: '#2563eb' }} />
           </div>
-
-          <div className="capacity-progress-item" style={{ marginTop: 16 }}>
-            <div className="capacity-progress-label">
-              <span>vCPU / GPU Core Allocation</span>
-              <strong>84%</strong>
-            </div>
-            <div className="striped-progress-bar">
-              <div className="striped-bar-fill striped-green" style={{ width: '84%' }} />
-            </div>
+          <div className="capacity-pie-grid">
+            <CapacityPieChart label="Compute cores" value={84} detail="vCPU / GPU allocation" color="#10b981" />
+            <CapacityPieChart label="NVMe storage" value={68} detail="Zero-G storage pool" color="#2563eb" />
           </div>
-
-          <div className="capacity-progress-item">
-            <div className="capacity-progress-label">
-              <span>Zero-G NVMe Storage Pool</span>
-              <strong>68%</strong>
-            </div>
-            <div className="striped-progress-bar">
-              <div className="striped-bar-fill striped-blue" style={{ width: '68%' }} />
-            </div>
-          </div>
-
-          <div className="capacity-progress-item">
-            <div className="capacity-progress-label">
-              <span>Laser Interconnect Bandwidth</span>
-              <strong>45%</strong>
-            </div>
-            <div className="striped-progress-bar">
-              <div className="striped-bar-fill striped-pink" style={{ width: '45%' }} />
-            </div>
-          </div>
+          {/* <div className="capacity-card-footer"><span>128.4 TFLOPS</span><small>Active compute output</small></div> */}
         </div>
       </div>
 

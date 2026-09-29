@@ -34,7 +34,7 @@ export default function Dashboard() {
     Home: 'Overview',
     Infrastructure: 'Infrastructure & Compute Instances',
     Telemetry: 'Telemetry & Space Analytics',
-    Operations: 'Mission Operations Terminal',
+    Operations: 'Mission Operations',
     'Cloud Storage': 'Orbital Cloud Storage',
     'Cloud regions': 'Cloud Regions Topology',
     Settings: 'System Settings & Security',

@@ -9,7 +9,7 @@ export default function OperationsPage() {
   const { machines, telemetry } = useSpaceData()
 
   return (
-    <AppShell title="Mission Operations Terminal" machinesCount={machines.length}>
+    <AppShell title="Mission Operations" machinesCount={machines.length}>
       <OperationsSection machines={machines} telemetry={telemetry} />
     </AppShell>
   )
