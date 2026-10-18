@@ -582,47 +582,34 @@ if (gps.satellites.isValid()) {
   // ===================================================
   // SERIAL PLOTTER
   // ===================================================
-
-  Serial.print(gx);
-  Serial.print(",");
-
-  Serial.print(gy);
-  Serial.print(",");
-
-  Serial.print(gz);
-  Serial.print(",");
-
-  Serial.print(bmpTemperature);
-  Serial.print(",");
-
-  Serial.print(pressure_hPa);
-  Serial.print(",");
-
-  Serial.print(altitude);
-  Serial.print(",");
-
-  Serial.print(dhtTemperature);
-  Serial.print(",");
-
-  Serial.println(dhtHumidity);
-
-  Serial.print("GPS :");
-  Serial.print(",");
-Serial.print(latitude, 6);
-
-Serial.print(",");
-Serial.print(longitude, 6);
-
-Serial.print(",");
-Serial.print(gpsAltitude, 2);
-
-Serial.print(",");
-Serial.print(gpsSpeed, 2);
-
-Serial.print(",");
-Serial.print(satellites);
-
-Serial.print(",");
-Serial.println(gpsValid ? 1 : 0);
-
+Serial.printf(
+  "{\"gx\":%.2f,"
+  "\"gy\":%.2f,"
+  "\"gz\":%.2f,"
+  "\"bmpTemperature\":%.2f,"
+  "\"pressure_hPa\":%.2f,"
+  "\"altitude\":%.2f,"
+  "\"dhtTemperature\":%.2f,"
+  "\"dhtHumidity\":%.2f,"
+  "\"latitude\":%.6f,"
+  "\"longitude\":%.6f,"
+  "\"gpsAltitude\":%.2f,"
+  "\"gpsSpeed\":%.2f,"
+  "\"satellites\":%d,"
+  "\"gpsValid\":%s}\n",
+  gx,
+  gy,
+  gz,
+  bmpTemperature,
+  pressure_hPa,
+  altitude,
+  dhtTemperature,
+  dhtHumidity,
+  latitude,
+  longitude,
+  gpsAltitude,
+  gpsSpeed,
+  satellites,
+  gpsValid ? "true" : "false"
+);
 }
