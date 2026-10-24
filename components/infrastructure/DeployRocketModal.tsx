@@ -22,28 +22,15 @@ export default function DeployRocketModal({
 
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
 
-    const newVm: RocketMachine = {
-      id: `vm-${Date.now().toString().slice(-4)}`,
-      name: name.trim().toUpperCase(),
-      region,
-      status: 'Running',
-      cpu,
-      memory,
-      image: 'Ubuntu 24.04 Space-Kernel',
-      ip: `10.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`,
-      mission: 'Orbital Workload',
-      cpuUsage: 12,
-      memUsage: 24,
-      tempC: 34,
-    }
-
-    onLaunch(newVm)
-    setName('')
-    onClose()
+    const response = await fetch('/api/machines', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ name, region, cpu, memory, image: 'Ubuntu 24.04 Space-Kernel', mission: 'Orbital Workload' }) })
+    const result = await response.json()
+    if (!response.ok) { window.alert(result.error || 'Unable to launch instance'); return }
+    onLaunch(result.data as RocketMachine)
+    setName(''); onClose()
   }
 
   return (

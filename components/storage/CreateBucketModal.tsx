@@ -21,23 +21,15 @@ export default function CreateBucketModal({
 
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
 
-    const newBucket: StorageBucket = {
-      id: `bkt-${Date.now().toString().slice(-4)}`,
-      name: name.trim().toLowerCase(),
-      region,
-      sizeGb: 256,
-      objectCount: 1420,
-      tier,
-      redundancy: 'Triple Orbit Sync',
-    }
-
-    onCreate(newBucket)
-    setName('')
-    onClose()
+    const response = await fetch('/api/storage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ name, region, tier }) })
+    const result = await response.json()
+    if (!response.ok) { window.alert(result.error || 'Unable to create bucket'); return }
+    onCreate(result.data as StorageBucket)
+    setName(''); onClose()
   }
 
   return (

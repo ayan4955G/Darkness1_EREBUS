@@ -8,6 +8,9 @@ node_modules
 npm-debug.log
 README.md
 .env*.local
+.env
+.env.*
+!.env.example
 .vscode
 .idea
 brain

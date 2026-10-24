@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   Terminal,
   LogOut,
+  ShieldCheck,
 } from 'lucide-react'
 import Brand from './Brand'
 
@@ -20,6 +21,9 @@ interface SidebarProps {
   activeSection?: string
   onSelectSection?: (section: string) => void
   onLogout?: () => void
+  userRole?: string
+  userName?: string
+  userEmail?: string
 }
 
 export default function Sidebar({
@@ -27,6 +31,9 @@ export default function Sidebar({
   activeSection,
   onSelectSection,
   onLogout,
+  userRole,
+  userName,
+  userEmail,
 }: SidebarProps) {
   const pathname = usePathname()
 
@@ -45,6 +52,7 @@ export default function Sidebar({
       section: 'Operations',
       icon: Terminal,
     },
+    ...(userRole === 'super_admin' ? [{ label: 'Super Admin', path: 'http://localhost:3001', section: 'Super Admin', icon: ShieldCheck }] : []),
     {
       label: 'Telemetry & Analytics',
       path: '/telemetry',
@@ -140,8 +148,8 @@ export default function Sidebar({
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div className="avatar">OP</div>
             <div>
-              <strong>Alex Drake</strong>
-              <span>operator@erebus.space</span>
+              <strong>{userName || 'Operator'}</strong>
+              <span>{userEmail || ''}</span>
             </div>
           </div>
           {onLogout && (

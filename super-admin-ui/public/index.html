@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101722" />
+    <title>EREBUS | Super Admin</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main id="login-screen" class="login-screen">
+      <form id="login-form" class="login-card">
+        <div class="brand-mark">E</div>
+        <p class="eyebrow">EREBUS CONTROL PLANE</p>
+        <h1>Super Admin</h1>
+        <p class="muted">Sign in with your super-admin account to manage team access.</p>
+        <label>Email<input id="login-email" type="email" autocomplete="username" required /></label>
+        <label>Password<input id="login-password" type="password" autocomplete="current-password" required /></label>
+        <button class="button button-primary" type="submit">Sign in <span>→</span></button>
+        <p id="login-message" class="form-message" role="alert"></p>
+      </form>
+      <div class="login-orbit orbit-one"></div><div class="login-orbit orbit-two"></div>
+    </main>
+
+    <div id="admin-app" class="app-shell" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="#accounts"><span class="brand-mark">E</span><span><strong>erebus</strong><small>ADMIN SYSTEMS</small></span></a>
+        <div class="workspace-label">WORKSPACE</div>
+        <button class="nav-link active" type="button"><span class="nav-icon">▦</span>Team accounts</button>
+        <div class="sidebar-note"><span class="live-dot"></span><span><strong>Control plane</strong><small>Secure connection active</small></span></div>
+        <div class="sidebar-profile"><span class="avatar">SA</span><span><strong id="profile-name">Super Admin</strong><small id="profile-email"></small></span><button id="logout-button" class="icon-button" title="Sign out" type="button">↗</button></div>
+      </aside>
+
+      <section class="main-area">
+        <header class="topbar"><div><span class="crumb">CONTROL PLANE</span><span class="crumb-separator">/</span><strong>Access management</strong></div><span class="secure-pill"><span class="live-dot"></span> PRIVATE WORKSPACE</span></header>
+        <main class="content" id="accounts">
+          <div class="page-heading"><div><p class="eyebrow">ADMINISTRATION / USERS</p><h1>Team access</h1><p class="muted">Provision accounts and assign access to platform workspaces.</p></div><div class="heading-mark">01 <span>/ USERS</span></div></div>
+
+          <div class="welcome-banner"><div><span class="banner-kicker">EREBUS · ACCESS CONTROL</span><h2>One control plane.<br /><em>Clear ownership.</em></h2><p>Give each operator access to the workspace they manage.</p></div><div class="banner-orbit"><div class="planet"><span>E</span></div><i class="orbit-ring ring-a"></i><i class="orbit-ring ring-b"></i><span class="orbit-star star-a">✦</span><span class="orbit-star star-b">✳</span></div></div>
+
+          <section class="stats-row" aria-label="Account totals">
+            <article class="stat-card"><span class="stat-label">TOTAL ACCOUNTS</span><strong id="total-count">—</strong><span class="stat-foot">Registered operators</span><span class="stat-icon">◎</span></article>
+            <article class="stat-card"><span class="stat-label">MISSION OPERATIONS</span><strong id="mission-count">—</strong><span class="stat-foot">Mission workspace access</span><span class="stat-icon mission-icon">⌁</span></article>
+            <article class="stat-card"><span class="stat-label">INFRASTRUCTURE</span><strong id="infra-count">—</strong><span class="stat-foot">Orbital machine access</span><span class="stat-icon infra-icon">▤</span></article>
+          </section>
+
+          <section class="management-grid">
+            <article class="panel create-panel">
+              <div class="panel-heading"><div><p class="eyebrow">NEW OPERATOR</p><h2>Create an account</h2></div><span class="step-number">01</span></div>
+              <form id="account-form">
+                <label>Full name<input id="full-name" name="fullName" placeholder="Operator name" required /></label>
+                <label>Work email<input id="account-email" name="email" type="email" placeholder="name@erebus.space" required /></label>
+                <label>Temporary password<input id="account-password" name="password" type="password" minlength="10" placeholder="At least 10 characters" required /><small class="field-hint">Minimum 10 characters</small></label>
+                <label>Workspace access<select id="account-role" name="role" required><option value="mission_operations">Mission Operations</option><option value="infrastructure_admin">Infrastructure &amp; Orbital Machines</option><option value="user">Standard user</option><option value="super_admin">Super Admin</option></select></label>
+                <div id="account-message" class="form-message" role="status"></div>
+                <button class="button button-primary create-button" type="submit">Create operator <span>＋</span></button>
+              </form>
+            </article>
+
+            <article class="panel accounts-panel">
+              <div class="panel-heading accounts-heading"><div><p class="eyebrow">DIRECTORY</p><h2>Platform accounts</h2></div><button id="refresh-button" class="button button-secondary" type="button">↻ <span>Refresh</span></button></div>
+              <div class="table-toolbar"><span id="account-total-label">Loading accounts…</span><span class="directory-dot"><span class="live-dot"></span> LIVE</span></div>
+              <div class="table-wrap"><table><thead><tr><th>OPERATOR</th><th>WORKSPACE</th><th>CREATED</th></tr></thead><tbody id="accounts-body"><tr><td colspan="3" class="empty-row">Loading account directory…</td></tr></tbody></table></div>
+              <p class="privacy-note"><span>◈</span> Passwords are hashed and never shown in this directory.</p>
+            </article>
+          </section>
+          <footer class="page-footer"><span>EREBUS ACCESS MANAGEMENT</span><span>AUTHORIZED ADMINISTRATORS ONLY</span></footer>
+        </main>
+      </section>
+    </div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>

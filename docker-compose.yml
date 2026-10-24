@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   erebus-space-cloud:
     build:
@@ -10,46 +8,79 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - HOSTNAME=0.0.0.0
-      - REDIS_URL=redis://erebus-redis:6379
-      - EREBUS_DATA_CENTER_NAME=EREBUS-CORE-01
-      - ORBITAL_ALTITUDE_KM=420
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      API_INTERNAL_URL: http://erebus-api:1000
+      EREBUS_DATA_CENTER_NAME: EREBUS-CORE-01
+      ORBITAL_ALTITUDE_KM: 420
     depends_on:
-      erebus-redis:
+      erebus-api:
+        condition: service_healthy
+    networks: [erebus-orbital-net]
+
+  erebus-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: erebus-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 1000
+      DATABASE_URL: postgres://${EREBUS_DB_USER:-erebus_user}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgresql:5432/${POSTGRES_DB:-erebus_db}
+      DEFAULT_ACCOUNT_NAME: ${DEFAULT_ACCOUNT_NAME:?Set DEFAULT_ACCOUNT_NAME in .env}
+      DEFAULT_ACCOUNT_EMAIL: ${DEFAULT_ACCOUNT_EMAIL:?Set DEFAULT_ACCOUNT_EMAIL in .env}
+      DEFAULT_ACCOUNT_PASSWORD: ${DEFAULT_ACCOUNT_PASSWORD:?Set DEFAULT_ACCOUNT_PASSWORD in .env}
+    depends_on:
+      postgresql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:1000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 10s
-    networks:
-      - erebus-orbital-net
-    volumes:
-      - erebus-data:/app/data
+      retries: 5
+      start_period: 20s
+    networks: [erebus-orbital-net]
 
-  erebus-redis:
-    image: redis:7-alpine
-    container_name: erebus-redis-cache
+  erebus-super-admin:
+    build:
+      context: ./super-admin-ui
+      dockerfile: Dockerfile
+    container_name: erebus-super-admin
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      API_ORIGIN: http://erebus-api:1000
+    depends_on:
+      erebus-api:
+        condition: service_healthy
+    networks: [erebus-orbital-net]
+
+  postgresql:
+    image: postgres:15-alpine
+    container_name: erebus-postgresql-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${EREBUS_DB_USER:-erebus_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-erebus_db}
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
-      retries: 3
-    networks:
-      - erebus-orbital-net
+      retries: 5
     volumes:
-      - redis-data:/data
+      - postgres-data:/var/lib/postgresql/data
+    networks: [erebus-orbital-net]
 
 networks:
   erebus-orbital-net:
     driver: bridge
 
 volumes:
-  erebus-data:
-  redis-data:
+  postgres-data:

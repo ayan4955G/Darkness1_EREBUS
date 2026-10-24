@@ -12,22 +12,29 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('operator@erebus.space')
-  const [password, setPassword] = useState('••••••••••••')
+  const [password, setPassword] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitted(true)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('erebus_authenticated', 'true')
+    setError('')
+    try {
+      const response = await fetch(isSignUp ? '/api/auth/signup' : '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password, ...(isSignUp ? { fullName } : {}) }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Authentication failed')
+      if (onLoginSuccess) onLoginSuccess()
+      else window.location.href = '/'
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Authentication failed')
+      setSubmitted(false)
     }
-    setTimeout(() => {
-      if (onLoginSuccess) {
-        onLoginSuccess()
-      } else {
-        window.location.href = '/'
-      }
-    }, 700)
   }
 
   return (
@@ -108,7 +115,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
           <form onSubmit={handleSubmit} className="voyager-form">
             {isSignUp && (
               <div className="input-pill-wrap">
-                <input
+            <input
                   type="text"
                   placeholder="Full name"
                   value={fullName}
@@ -134,7 +141,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               <input
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Password"
-                value={password}
+                  value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="voyager-input-pill"
                 required
@@ -168,6 +175,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
               )}
             </button>
           </form>
+          {error && <p role="alert" style={{ color: '#ef4444', marginTop: 12, fontSize: 13 }}>{error}</p>}
 
           {/* Bottom Toggle */}
           <div className="voyager-footer-toggle">

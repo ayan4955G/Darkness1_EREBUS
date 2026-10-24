@@ -1,15 +1,24 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 export default function SettingsSection() {
-  const [apiKey, setApiKey] = useState('erebus_live_sk_94829471908472918471')
-  const [threshold, setThreshold] = useState('0.15 mSv/h Trigger Auto-Safe Mode')
+  const [threshold, setThreshold] = useState('0.15')
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+  useEffect(() => {
+    fetch('/api/settings').then((response) => response.json()).then((result) => {
+      if (result.success) setThreshold(String(result.data.radiationThreshold))
+    }).catch(() => setError('Unable to load settings'))
+  }, [])
+
+  const handleSave = async () => {
+    setError('')
+    const response = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ radiationThreshold: Number(threshold) }) })
+    const result = await response.json()
+    if (!response.ok) { setError(result.error || 'Unable to save settings'); return }
+    setSaved(true); setTimeout(() => setSaved(false), 3000)
   }
 
   return (
@@ -26,22 +35,18 @@ export default function SettingsSection() {
           Orbital Security & API Credentials
         </h3>
         <div className="form-group">
-          <label>Primary Laser API Secret Token</label>
-          <input
-            className="form-input"
-            readOnly
-            value={apiKey}
-            style={{ fontFamily: 'monospace' }}
-          />
+          <label>Session security</label>
+          <p>Dashboard API requests require your authenticated, HTTP-only session.</p>
         </div>
         <div className="form-group">
           <label>Radiation Auto-Shielding Threshold</label>
           <input
             className="form-input"
-            value={threshold}
+            type="number" min="0.0001" step="0.0001" value={threshold}
             onChange={(e) => setThreshold(e.target.value)}
           />
         </div>
+        {error && <p role="alert" style={{ color: '#ef4444' }}>{error}</p>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button className="primary-btn" onClick={handleSave} type="button">
             {saved ? '✓ Configurations Saved' : 'Save Configurations'}

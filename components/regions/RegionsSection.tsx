@@ -1,42 +1,48 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 export default function RegionsSection() {
+  const [machineCounts, setMachineCounts] = useState<Record<string, number>>({})
+  useEffect(() => {
+    fetch('/api/regions').then((response) => response.json()).then((result) => {
+      if (result.success) setMachineCounts(Object.fromEntries(result.data.map((region: { region: string; machineCount: number }) => [region.region, region.machineCount])))
+    }).catch((error) => console.error('Unable to load regions', error))
+  }, [])
   const regions = [
     {
       name: 'EREBUS-CORE',
       code: 'LEO-PRIMARY',
       ping: '0.4 ms',
-      nodes: 12,
+      nodes: machineCounts['EREBUS-CORE'] ?? 0,
       orbit: 'Low Earth Orbit (412 km)',
     },
     {
       name: 'ORBITAL-01',
       code: 'GEO-ALPHA',
       ping: '1.2 ms',
-      nodes: 8,
+      nodes: machineCounts['ORBITAL-01'] ?? 0,
       orbit: 'Geostationary Equatorial Orbit',
     },
     {
       name: 'ORBITAL-02',
       code: 'GEO-BETA',
       ping: '1.8 ms',
-      nodes: 6,
+      nodes: machineCounts['ORBITAL-02'] ?? 0,
       orbit: 'Geostationary Polar Orbit',
     },
     {
       name: 'LUNAR-01',
       code: 'MOON-SOUTH',
       ping: '1.28 s',
-      nodes: 4,
+      nodes: machineCounts['LUNAR-01'] ?? 0,
       orbit: 'Lunar South Pole Gateway',
     },
     {
       name: 'MARS-RELAY',
       code: 'AREO-RELAY',
       ping: '4.20 min',
-      nodes: 2,
+      nodes: machineCounts['MARS-RELAY'] ?? 0,
       orbit: 'Areostationary Relay Node',
     },
   ]

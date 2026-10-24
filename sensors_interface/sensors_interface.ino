@@ -2,6 +2,7 @@
 #include <math.h>
 #include <DHT.h>
 #include <TinyGPSPlus.h>
+#include <esp_system.h>
 
 // =====================================================
 // MPU6050
@@ -14,6 +15,7 @@
 #define GYRO_XOUT_H   0x43
 #define TEMP_OUT_H    0x41
 
+#define BUZZER_PIN 25
 
 // =====================================================
 // BMP280
@@ -55,6 +57,20 @@ int32_t t_fine;
 
 DHT dht(DHT_PIN, DHT_TYPE);
 
+// DHT22 is read at most once every 2 seconds.
+float dhtHumidity = NAN;
+float dhtTemperature = NAN;
+unsigned long lastDhtRead = 0;
+
+// Set false when using Arduino Serial Plotter (diagnostic lines are not JSON).
+const bool DEBUG_DIAGNOSTICS = false;
+
+void debugStage(const char* stage) {
+  if (DEBUG_DIAGNOSTICS) {
+    Serial.printf("[%lu ms] %s\n", millis(), stage);
+  }
+}
+
 
 // =====================================================
 // ALTITUDE
@@ -79,18 +95,29 @@ void writeRegister(byte reg, byte value) {
 
 
 int16_t read16(byte reg) {
-
   Wire.beginTransmission(MPU6050_ADDR);
-
   Wire.write(reg);
 
-  Wire.endTransmission(false);
+  uint8_t error = Wire.endTransmission(false);
+  if (error != 0) {
+    Serial.printf("[I2C] MPU register 0x%02X transaction error=%u\n", reg, error);
+    return 0;
+  }
 
-  Wire.requestFrom(MPU6050_ADDR, 2);
+  size_t received = Wire.requestFrom(
+    (uint8_t)MPU6050_ADDR, (size_t)2, (bool)true
+  );
 
-  int16_t value = Wire.read() << 8 | Wire.read();
+  if (received != 2) {
+    Serial.printf("[I2C] MPU register 0x%02X returned %u bytes\n",
+                  reg, (unsigned)received);
+    while (Wire.available()) Wire.read();
+    return 0;
+  }
 
-  return value;
+  uint8_t high = Wire.read();
+  uint8_t low = Wire.read();
+  return (int16_t)(((uint16_t)high << 8) | low);
 }
 
 
@@ -99,19 +126,29 @@ int16_t read16(byte reg) {
 // =====================================================
 
 uint16_t bmpRead16_LE(uint8_t reg) {
-
   Wire1.beginTransmission(BMP280_ADDR);
-
   Wire1.write(reg);
 
-  Wire1.endTransmission(false);
+  uint8_t error = Wire1.endTransmission(false);
+  if (error != 0) {
+    Serial.printf("[I2C] BMP register 0x%02X transaction error=%u\n", reg, error);
+    return 0;
+  }
 
-  Wire1.requestFrom(BMP280_ADDR, (uint8_t)2);
+  size_t received = Wire1.requestFrom(
+    (uint8_t)BMP280_ADDR, (size_t)2, (bool)true
+  );
+
+  if (received != 2) {
+    Serial.printf("[I2C] BMP register 0x%02X returned %u bytes\n",
+                  reg, (unsigned)received);
+    while (Wire1.available()) Wire1.read();
+    return 0;
+  }
 
   uint8_t low = Wire1.read();
   uint8_t high = Wire1.read();
-
-  return (uint16_t)high << 8 | low;
+  return ((uint16_t)high << 8) | low;
 }
 
 
@@ -157,36 +194,45 @@ void readBMP280Calibration() {
 // READ BMP280 RAW DATA
 // =====================================================
 
-void readBMP280Raw(
-  int32_t &pressureRaw,
-  int32_t &temperatureRaw
-) {
-
+bool readBMP280Raw(int32_t &pressureRaw, int32_t &temperatureRaw) {
   Wire1.beginTransmission(BMP280_ADDR);
-
   Wire1.write(BMP280_PRESSURE);
 
-  Wire1.endTransmission(false);
+  uint8_t error = Wire1.endTransmission(false);
+  if (error != 0) {
+    Serial.printf("[I2C] BMP data pointer error=%u\n", error);
+    return false;
+  }
 
-  Wire1.requestFrom(BMP280_ADDR, (uint8_t)6);
+  size_t received = Wire1.requestFrom(
+    (uint8_t)BMP280_ADDR, (size_t)6, (bool)true
+  );
 
-  uint8_t p_msb = Wire1.read();
-  uint8_t p_lsb = Wire1.read();
+  if (received != 6) {
+    Serial.printf("[I2C] BMP returned %u bytes, expected 6\n",
+                  (unsigned)received);
+    while (Wire1.available()) Wire1.read();
+    return false;
+  }
+
+  uint8_t p_msb  = Wire1.read();
+  uint8_t p_lsb  = Wire1.read();
   uint8_t p_xlsb = Wire1.read();
-
-  uint8_t t_msb = Wire1.read();
-  uint8_t t_lsb = Wire1.read();
+  uint8_t t_msb  = Wire1.read();
+  uint8_t t_lsb  = Wire1.read();
   uint8_t t_xlsb = Wire1.read();
 
   pressureRaw =
-      ((int32_t)p_msb << 12) |
-      ((int32_t)p_lsb << 4) |
-      ((int32_t)p_xlsb >> 4);
+    ((int32_t)p_msb << 12) |
+    ((int32_t)p_lsb << 4) |
+    ((int32_t)p_xlsb >> 4);
 
   temperatureRaw =
-      ((int32_t)t_msb << 12) |
-      ((int32_t)t_lsb << 4) |
-      ((int32_t)t_xlsb >> 4);
+    ((int32_t)t_msb << 12) |
+    ((int32_t)t_lsb << 4) |
+    ((int32_t)t_xlsb >> 4);
+
+  return true;
 }
 
 
@@ -277,21 +323,15 @@ float compensatePressure(int32_t adc_P) {
 // =====================================================
 
 float readPressureHpa() {
+  int32_t pressureRaw, temperatureRaw;
 
-  int32_t pressureRaw;
-  int32_t temperatureRaw;
-
-  readBMP280Raw(
-    pressureRaw,
-    temperatureRaw
-  );
+  if (!readBMP280Raw(pressureRaw, temperatureRaw)) {
+    return NAN;
+  }
 
   compensateTemperature(temperatureRaw);
-
-  float pressure =
-      compensatePressure(pressureRaw);
-
-  return pressure / 100.0;
+  float pressure = compensatePressure(pressureRaw);
+  return pressure / 100.0f;
 }
 
 
@@ -300,18 +340,18 @@ float readPressureHpa() {
 // =====================================================
 
 float calculateAltitude(float pressureHpa) {
+  if (!isfinite(pressureHpa) || !isfinite(referencePressure) ||
+      pressureHpa <= 0.0f || referencePressure <= 0.0f) {
+    return NAN;
+  }
 
-  float altitudeMeters =
-      44330.0 *
-      (1.0 - pow(
-        pressureHpa / referencePressure,
-        0.1903
-      ));
+  float ratio = pressureHpa / referencePressure;
+  if (ratio <= 0.0f || !isfinite(ratio)) {
+    return NAN;
+  }
 
-  float altitudeFeet =
-      altitudeMeters * 3.28084;
-
-  return altitudeFeet;
+  float altitudeMeters = 44330.0f * (1.0f - powf(ratio, 0.1903f));
+  return altitudeMeters * 3.28084f;
 }
 
 
@@ -319,118 +359,104 @@ float calculateAltitude(float pressureHpa) {
 // SETUP
 // =====================================================
 
+
+
 void setup() {
-
   Serial.begin(115200);
-
   delay(1000);
 
+  Serial.printf("ESP32 reset reason: %d\n", (int)esp_reset_reason());
 
-  // ===================================================
-  // MPU6050
-  // ===================================================
-
+  // MPU6050 I2C bus
   Wire.begin(21, 22);
+  Wire.setTimeOut(50);
 
-  writeRegister(
-    PWR_MGMT_1,
-    0x00
-  );
+  pinMode(BUZZER_PIN, OUTPUT);
+  delay(50);
 
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(PWR_MGMT_1);
+  Wire.write(0x00);
+  uint8_t mpuError = Wire.endTransmission();
+  if (mpuError != 0) {
+    Serial.printf("[INIT] MPU6050 not responding; I2C error=%u\n", mpuError);
+  } else {
+    Serial.println("[INIT] MPU6050 detected");
+  }
+
+  // BMP280 uses a separate I2C controller/pin pair
+  Wire1.begin(BMP_SDA, BMP_SCL);
+  Wire1.setTimeOut(50);
   delay(100);
-
-
-  // ===================================================
-  // BMP280
-  // ===================================================
-
-  Wire1.begin(
-    BMP_SDA,
-    BMP_SCL
-  );
-
-  delay(100);
-
-
-  // Check BMP280 address
 
   Wire1.beginTransmission(0x76);
-
   if (Wire1.endTransmission() == 0) {
-
     BMP280_ADDR = 0x76;
-
   } else {
-
     Wire1.beginTransmission(0x77);
-
     if (Wire1.endTransmission() == 0) {
-
       BMP280_ADDR = 0x77;
+    } else {
+      Serial.println("[INIT] ERROR: BMP280 not found at 0x76 or 0x77");
+      while (true) {
+        delay(1000);
+        Serial.println("[INIT] Check BMP280 power, SDA=19, SCL=18, and GND");
+      }
     }
   }
 
-
-  // Read calibration
-
+  Serial.printf("[INIT] BMP280 detected at 0x%02X\n", BMP280_ADDR);
   readBMP280Calibration();
 
-
-  // Configure BMP280
-
+  // Configure BMP280: temperature/pressure oversampling x1, normal mode
   Wire1.beginTransmission(BMP280_ADDR);
-
   Wire1.write(BMP280_CTRL_MEAS);
-
   Wire1.write(0x27);
-
-  Wire1.endTransmission();
-
+  uint8_t ctrlError = Wire1.endTransmission();
+  if (ctrlError != 0) {
+    Serial.printf("[INIT] BMP280 CTRL_MEAS write error=%u\n", ctrlError);
+  }
 
   Wire1.beginTransmission(BMP280_ADDR);
-
   Wire1.write(BMP280_CONFIG);
-
   Wire1.write(0x00);
+  uint8_t configError = Wire1.endTransmission();
+  if (configError != 0) {
+    Serial.printf("[INIT] BMP280 CONFIG write error=%u\n", configError);
+  }
 
-  Wire1.endTransmission();
-
-
-  delay(100);
-
-
-  // ===================================================
   // DHT22
-  // ===================================================
-
   dht.begin();
-
   delay(2000);
 
-  // =====================================================
   // NEO GPS
-  // =====================================================
-
   gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  Serial.println("[INIT] NEO GPS initialized");
 
-  Serial.println("NEO GPS initialized");
-
-
-  // ===================================================
-  // CALCULATE REFERENCE PRESSURE
-  // ===================================================
-
-  float pressureSum = 0.0;
+  // Establish reference pressure from valid samples only.
+  Serial.println("[INIT] Calibrating reference pressure...");
+  double pressureSum = 0.0;
+  int validPressureSamples = 0;
 
   for (int i = 0; i < 50; i++) {
-
-    pressureSum += readPressureHpa();
-
+    float p = readPressureHpa();
+    if (isfinite(p) && p > 0.0f) {
+      pressureSum += p;
+      validPressureSamples++;
+    }
     delay(20);
   }
 
-  referencePressure =
-      pressureSum / 50.0;
+  if (validPressureSamples > 0) {
+    referencePressure = pressureSum / validPressureSamples;
+    Serial.printf("[INIT] Reference pressure: %.2f hPa (%d samples)\n",
+                  referencePressure, validPressureSamples);
+  } else {
+    referencePressure = NAN;
+    Serial.println("[INIT] WARNING: no valid BMP280 pressure samples; altitude will be NAN");
+  }
+
+  Serial.println("[INIT] Setup complete");
 }
 
 // =====================================================
@@ -438,178 +464,141 @@ void setup() {
 // =====================================================
 
 void loop() {
+  debugStage("LOOP START");
+  digitalWrite(BUZZER_PIN, HIGH);
 
-  // ===================================================
-  // MPU6050
-  // ===================================================
+  // MPU6050: log each individual I2C read to pinpoint a possible hang.
+  debugStage("MPU: accel X");
+  int16_t accelX = read16(ACCEL_XOUT_H);
 
-  int16_t accelX =
-      read16(ACCEL_XOUT_H);
+  debugStage("MPU: accel Y");
+  int16_t accelY = read16(ACCEL_XOUT_H + 2);
 
-  int16_t accelY =
-      read16(ACCEL_XOUT_H + 2);
+  debugStage("MPU: accel Z");
+  int16_t accelZ = read16(ACCEL_XOUT_H + 4);
 
-  int16_t accelZ =
-      read16(ACCEL_XOUT_H + 4);
+  debugStage("MPU: temperature");
+  int16_t tempRaw = read16(TEMP_OUT_H);
 
-  int16_t tempRaw =
-      read16(TEMP_OUT_H);
+  debugStage("MPU: gyro X");
+  int16_t gyroX = read16(GYRO_XOUT_H);
 
-  int16_t gyroX =
-      read16(GYRO_XOUT_H);
+  debugStage("MPU: gyro Y");
+  int16_t gyroY = read16(GYRO_XOUT_H + 2);
 
-  int16_t gyroY =
-      read16(GYRO_XOUT_H + 2);
+  debugStage("MPU: gyro Z");
+  int16_t gyroZ = read16(GYRO_XOUT_H + 4);
 
-  int16_t gyroZ =
-      read16(GYRO_XOUT_H + 4);
+  debugStage("AFTER MPU");
 
+  float ax = accelX / 16384.0f;
+  float ay = accelY / 16384.0f;
+  float az = accelZ / 16384.0f;
 
-  // Accelerometer
+  float gx = gyroX / 131.0f;
+  float gy = gyroY / 131.0f;
+  float gz = gyroZ / 131.0f;
 
-  float ax =
-      accelX / 16384.0;
+  float mpuTemperature = (tempRaw / 340.0f) + 36.53f;
+  (void)ax; (void)ay; (void)az; (void)mpuTemperature;
 
-  float ay =
-      accelY / 16384.0;
-
-  float az =
-      accelZ / 16384.0;
-
-
-  // Gyroscope
-
-  float gx =
-      gyroX / 131.0;
-
-  float gy =
-      gyroY / 131.0;
-
-  float gz =
-      gyroZ / 131.0;
-
-
-  // MPU6050 temperature
-
-  float mpuTemperature =
-      (tempRaw / 340.0) + 36.53;
-
-
-  // ===================================================
   // BMP280
-  // ===================================================
+  debugStage("BEFORE BMP");
+  int32_t pressureRaw = 0;
+  int32_t temperatureRaw = 0;
 
-  int32_t pressureRaw;
-  int32_t temperatureRaw;
+  if (!readBMP280Raw(pressureRaw, temperatureRaw)) {
+    debugStage("BMP READ FAILED");
+    delay(100);
+    return;
+  }
 
-  readBMP280Raw(
-    pressureRaw,
-    temperatureRaw
+  float bmpTemperature = compensateTemperature(temperatureRaw);
+  float pressure = compensatePressure(pressureRaw);
+  float pressure_hPa = pressure / 100.0f;
+  debugStage("AFTER BMP");
+
+  if (!isfinite(pressure_hPa) || pressure_hPa <= 0.0f) {
+    Serial.println("[BMP] Invalid pressure result");
+    delay(100);
+    return;
+  }
+
+  // GPS: parse whatever bytes are currently available; never wait for a fix.
+  debugStage("BEFORE GPS");
+  while (gpsSerial.available() > 0) {
+    gps.encode(gpsSerial.read());
+  }
+
+  double latitude = 0.0;
+  double longitude = 0.0;
+  double gpsAltitude = 0.0;
+  double gpsSpeed = 0.0;
+  int satellites = 0;
+  bool gpsValid = gps.location.isValid();
+
+  if (gpsValid) {
+    latitude = gps.location.lat();
+    longitude = gps.location.lng();
+  }
+  if (gps.altitude.isValid()) gpsAltitude = gps.altitude.meters();
+  if (gps.speed.isValid()) gpsSpeed = gps.speed.kmph();
+  if (gps.satellites.isValid()) satellites = gps.satellites.value();
+  debugStage("AFTER GPS");
+
+  // Altitude based on BMP280 pressure.
+  float altitude = calculateAltitude(pressure_hPa);
+
+  // DHT22: update no more often than every 2 seconds.
+  debugStage("BEFORE DHT");
+  if (lastDhtRead == 0 || millis() - lastDhtRead >= 2000UL) {
+    lastDhtRead = millis();
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
+    if (!isnan(h) && !isnan(t)) {
+      dhtHumidity = h;
+      dhtTemperature = t;
+    } else {
+      Serial.println("[DHT] Read failed; keeping last valid reading");
+    }
+  }
+  debugStage("AFTER DHT");
+
+  // JSON output. Diagnostic messages are also enabled; disable diagnostics
+  // by setting DEBUG_DIAGNOSTICS=false when using Serial Plotter.
+  debugStage("BEFORE OUTPUT");
+    
+  Serial.printf(
+    "{\"ax\":%.3f,"
+    "\"ay\":%.3f,"
+    "\"az\":%.3f,"
+    "\"gx\":%.2f,"
+    "\"gy\":%.2f,"
+    "\"gz\":%.2f,"
+    "\"bmpTemperature\":%.2f,"
+    "\"pressure_hPa\":%.2f,"
+    "\"altitude\":%.2f,"
+    "\"dhtTemperature\":%.2f,"
+    "\"dhtHumidity\":%.2f,"
+    "\"latitude\":%.6f,"
+    "\"longitude\":%.6f,"
+    "\"gpsAltitude\":%.2f,"
+    "\"gpsSpeed\":%.2f,"
+    "\"satellites\":%d,"
+    "\"gpsValid\":%s}\n",
+    ax, ay, az,
+    gx, gy, gz,
+    bmpTemperature, pressure_hPa, altitude,
+    dhtTemperature, dhtHumidity,
+    latitude, longitude, gpsAltitude, gpsSpeed,
+    satellites, gpsValid ? "true" : "false"
   );
 
+    digitalWrite(BUZZER_PIN, LOW);
+  debugStage("LOOP END");
 
-  float bmpTemperature =
-      compensateTemperature(
-        temperatureRaw
-      );
-
-
-  float pressure =
-      compensatePressure(
-        pressureRaw
-      );
+  delay(20);
 
 
-  float pressure_hPa =
-      pressure / 100.0;
-
-  
-// =====================================================
-// NEO GPS
-// =====================================================
-
-while (gpsSerial.available() > 0) {
-  gps.encode(gpsSerial.read());
-}
-
-double latitude = 0.0;
-double longitude = 0.0;
-double gpsAltitude = 0.0;
-double gpsSpeed = 0.0;
-int satellites = 0;
-bool gpsValid = gps.location.isValid();
-
-if (gpsValid) {
-  latitude = gps.location.lat();
-  longitude = gps.location.lng();
-}
-
-if (gps.altitude.isValid()) {
-  gpsAltitude = gps.altitude.meters();
-}
-
-if (gps.speed.isValid()) {
-  gpsSpeed = gps.speed.kmph();
-}
-
-if (gps.satellites.isValid()) {
-  satellites = gps.satellites.value();
-}
-
-
-
-  // ===================================================
-  // ALTITUDE
-  // ===================================================
-
-  float altitude =
-      calculateAltitude(
-        pressure_hPa
-      );
-
-
-  // ===================================================
-  // DHT22
-  // ===================================================
-
-  float dhtHumidity =
-      dht.readHumidity();
-
-  float dhtTemperature =
-      dht.readTemperature();
-
-
-  // ===================================================
-  // SERIAL PLOTTER
-  // ===================================================
-Serial.printf(
-  "{\"gx\":%.2f,"
-  "\"gy\":%.2f,"
-  "\"gz\":%.2f,"
-  "\"bmpTemperature\":%.2f,"
-  "\"pressure_hPa\":%.2f,"
-  "\"altitude\":%.2f,"
-  "\"dhtTemperature\":%.2f,"
-  "\"dhtHumidity\":%.2f,"
-  "\"latitude\":%.6f,"
-  "\"longitude\":%.6f,"
-  "\"gpsAltitude\":%.2f,"
-  "\"gpsSpeed\":%.2f,"
-  "\"satellites\":%d,"
-  "\"gpsValid\":%s}\n",
-  gx,
-  gy,
-  gz,
-  bmpTemperature,
-  pressure_hPa,
-  altitude,
-  dhtTemperature,
-  dhtHumidity,
-  latitude,
-  longitude,
-  gpsAltitude,
-  gpsSpeed,
-  satellites,
-  gpsValid ? "true" : "false"
-);
 }

@@ -33,13 +33,10 @@ export default function MachineConnectPage({ params }: PageProps) {
     async function loadMachine() {
       try {
         setLoading(true)
-        const res = await fetch('/api/machines')
+        const res = await fetch(`/api/machines/${encodeURIComponent(id)}`, { credentials: 'include' })
         const data = await res.json()
-        if (data.success && Array.isArray(data.data)) {
-          const found = data.data.find(
-            (m: RocketMachine) => m.id.toLowerCase() === id.toLowerCase()
-          )
-          if (found) {
+        if (data.success && data.data) {
+            const found = data.data as RocketMachine
             setMachine(found)
             setSshLogs([
               {
@@ -59,36 +56,8 @@ export default function MachineConnectPage({ params }: PageProps) {
               },
             ])
             return
-          }
         }
-        // Fallback default node if not found in mock array
-        const defaultNode: RocketMachine = {
-          id,
-          name: id.toUpperCase(),
-          region: 'EREBUS-CORE',
-          status: 'Running',
-          cpu: '64 vCPU',
-          memory: '256 GB NVMe',
-          image: 'Darkness Orbital OS v4.2',
-          ip: '10.24.1.99',
-          mission: 'Dedicated High-Speed Computing Vanguard',
-          cpuUsage: 22.4,
-          memUsage: 45.1,
-          tempC: 31.8,
-        }
-        setMachine(defaultNode)
-        setSshLogs([
-          {
-            id: 1,
-            type: 'system',
-            text: `[LASER UPLINK ESTABLISHED] Direct crosslink to ${defaultNode.name}`,
-          },
-          {
-            id: 2,
-            type: 'system',
-            text: 'Available commands: health, top, reboot, clear, ping, ip, help',
-          },
-        ])
+        setMachine(null)
       } catch (err) {
         console.error('Failed to load rocket node', err)
       } finally {
@@ -99,7 +68,7 @@ export default function MachineConnectPage({ params }: PageProps) {
     loadMachine()
   }, [id])
 
-  const handleSshSubmit = (e: React.FormEvent) => {
+  const handleSshSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const cmd = sshInput.trim().toLowerCase()
     if (!cmd || !machine) return
@@ -131,6 +100,9 @@ export default function MachineConnectPage({ params }: PageProps) {
       sysReply = `bash: command not found: ${cmd}. Type "help" for available commands.`
     }
 
+    const response = await fetch('/api/terminal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ command: sshInput, machineId: machine.id }) })
+    const result = await response.json()
+    if (response.ok && result.output) sysReply = result.output
     setSshLogs((prev) => [
       ...prev,
       userLog,
@@ -139,19 +111,15 @@ export default function MachineConnectPage({ params }: PageProps) {
     setSshInput('')
   }
 
-  const handleTogglePower = () => {
+  const handleTogglePower = async () => {
     if (!machine) return
-    setMachine((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: prev.status === 'Running' ? 'Stopped' : 'Running',
-          }
-        : null
-    )
+    const status = machine.status === 'Running' ? 'Stopped' : 'Running'
+    const response = await fetch(`/api/machines/${encodeURIComponent(machine.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status }) })
+    const result = await response.json()
+    if (response.ok) setMachine(result.data)
   }
 
-  if (loading || !machine) {
+  if (loading) {
     return (
       <AppShell title="Connecting to Orbital Payload...">
         <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>
@@ -159,6 +127,10 @@ export default function MachineConnectPage({ params }: PageProps) {
         </div>
       </AppShell>
     )
+  }
+
+  if (!machine) {
+    return <AppShell title="Machine not found"><div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>This machine does not exist or is unavailable.</div></AppShell>
   }
 
   return (
