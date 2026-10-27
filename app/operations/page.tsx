@@ -6,11 +6,16 @@ import OperationsSection from '@/components/operations/OperationsSection'
 import { useSpaceData } from '@/lib/useSpaceData'
 
 export default function OperationsPage() {
-  const { machines, telemetry } = useSpaceData()
+  const { machines, telemetry, telemetryStatus, telemetryHistory } = useSpaceData()
 
   return (
     <AppShell title="Mission Operations" machinesCount={machines.length}>
-      <OperationsSection machines={machines} telemetry={telemetry} />
+      <OperationsSection
+        machines={machines}
+        telemetry={telemetry}
+        telemetryStatus={telemetryStatus}
+        telemetryHistory={telemetryHistory}
+      />
     </AppShell>
   )
 }

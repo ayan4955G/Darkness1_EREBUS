@@ -19,6 +19,8 @@ export default function Dashboard() {
   const {
     machines,
     telemetry,
+    telemetryStatus,
+    telemetryHistory,
     buckets,
     refresh,
     addMachine,
@@ -63,7 +65,12 @@ export default function Dashboard() {
       )}
 
       {activeSection === 'Operations' && (
-        <OperationsSection machines={machines} telemetry={telemetry} />
+        <OperationsSection
+          machines={machines}
+          telemetry={telemetry}
+          telemetryStatus={telemetryStatus}
+          telemetryHistory={telemetryHistory}
+        />
       )}
 
       {activeSection === 'Cloud Storage' && (

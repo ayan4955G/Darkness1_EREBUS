@@ -4,10 +4,13 @@ import { randomBytes, scrypt as scryptCallback, timingSafeEqual, createHash } fr
 import { promisify } from 'node:util'
 import { Pool } from 'pg'
 import { runMigrations } from './migrate.js'
+import { ReceiverClient } from './services/receiverClient.js'
+import { generateSimulatedTelemetry } from './services/telemetrySimulator.js'
 
 const scrypt = promisify(scryptCallback)
 const app = express()
 const pool = new Pool({ connectionString: process.env.DATABASE_URL || 'postgres://erebus_user:erebus_password@localhost:5432/erebus_db' })
+const receiverClient = new ReceiverClient({ pool })
 const sessionCookie = 'erebus_session'
 const sessionDays = 7
 app.use(express.json({ limit: '1mb' }))
@@ -82,7 +85,7 @@ app.post('/api/auth/logout', asyncRoute(async (req, res) => {
 }))
 
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth/') || req.path === '/health') return next()
+  if (req.path.startsWith('/auth/') || req.path === '/health' || req.path.startsWith('/telemetry')) return next()
   return requireAuth(req, res, next)
 })
 
@@ -171,10 +174,181 @@ app.post('/api/storage', asyncRoute(async (req,res) => {
   await logEvent(`Created space storage bucket '${result.rows[0].name}'`,'info')
   res.status(201).json({success:true,data:result.rows[0]})
 }))
-app.get('/api/telemetry', (_req,res) => {
-  const now=new Date().toISOString(); const wave=Math.sin(Date.now()/10000)
-  res.json({success:true,telemetry:{timestamp:now,orbitalPhysics:{velocityKmS:+(7.66+wave*.02).toFixed(3),altitudeKm:+(418.5+wave*2.1).toFixed(1),inclinationDeg:51.64,orbitalPeriodMin:92.68},powerAndThermal:{solarPowerOutputMw:+(84.6+wave*4.2).toFixed(1),batteryChargePercent:+(96.4+wave*1.5).toFixed(1),thermalCoreTempC:+(41.2+wave*2.8).toFixed(1),radiatorDissipationKw:+(310.4+wave*12).toFixed(1)},environmentalShielding:{cosmicRadiationFluxMsv:+(.14+Math.abs(wave)*.05).toFixed(3),geomagneticFieldStrengthUt:+(48.2+wave*3.1).toFixed(1),shieldIntegrityPercent:99.98},networkTopology:{laserCrosslinksActive:16,earthDownlinkGbps:+(18.6+wave*1.2).toFixed(2),interplanetaryLatencyMs:{'EREBUS-CORE':4,'ORBITAL-01':12,'ORBITAL-02':18,'LUNAR-01':1280,'MARS-RELAY':420000}}}})
+function getTelemetryPayload() {
+  const isSimulationMode = process.env.SIMULATION_MODE === 'true'
+  const receiverData = receiverClient.getLatestData()
+  const status = receiverClient.getStatus()
+
+  // If simulation mode is explicitly enabled and no real receiver packet has arrived
+  if (isSimulationMode && !receiverData.normalized) {
+    const sim = generateSimulatedTelemetry()
+    return {
+      success: true,
+      source: 'simulated',
+      isSimulated: true,
+      status: {
+        ...status,
+        simulated: true,
+        receiving: false,
+        stale: false,
+        offline: false,
+      },
+      telemetry: sim,
+      raw: sim.sensorReadings,
+    }
+  }
+
+  // Real receiver data available
+  if (receiverData.normalized) {
+    const norm = receiverData.normalized
+    const sensors = norm.sensorReadings
+
+    // Build backward-compatible telemetry envelope for existing orbital dashboard components
+    const legacyEnvelope = {
+      timestamp: norm.receivedAt,
+      orbitalPhysics: {
+        velocityKmS: sensors.speedKmh ? +(sensors.speedKmh / 3600).toFixed(3) : null,
+        altitudeKm: sensors.altitudeKm ?? null,
+        inclinationDeg: 51.64,
+        orbitalPeriodMin: 92.68,
+      },
+      powerAndThermal: {
+        solarPowerOutputMw: null,
+        batteryChargePercent: null,
+        thermalCoreTempC: sensors.temperature ?? null,
+        radiatorDissipationKw: null,
+      },
+      environmentalShielding: {
+        cosmicRadiationFluxMsv: null,
+        geomagneticFieldStrengthUt: null,
+        shieldIntegrityPercent: 100,
+      },
+      networkTopology: {
+        laserCrosslinksActive: status.connected ? 1 : 0,
+        earthDownlinkGbps: status.rssi ? +(Math.max(0, (status.rssi + 120) / 10)).toFixed(2) : null,
+        interplanetaryLatencyMs: { 'GROUND-LORA': status.lastPacketAgeMs ? Math.min(9999, status.lastPacketAgeMs) : 0 },
+      },
+    }
+
+    return {
+      success: true,
+      source: 'receiver',
+      isSimulated: false,
+      status,
+      telemetry: {
+        ...legacyEnvelope,
+        sensorReadings: sensors,
+        packetId: norm.packetId,
+        receivedAt: norm.receivedAt,
+        rssi: norm.rssi,
+        snr: norm.snr,
+      },
+      raw: norm.raw,
+    }
+  }
+
+  // No telemetry received yet (offline or waiting for packet)
+  return {
+    success: true,
+    source: 'receiver',
+    isSimulated: false,
+    status: {
+      ...status,
+      offline: true,
+      receiving: false,
+    },
+    telemetry: null,
+    raw: null,
+  }
+}
+
+app.get('/api/telemetry', (_req, res) => {
+  res.json(getTelemetryPayload())
 })
+
+// Real-time Server-Sent Events (SSE) telemetry stream for instantaneous (<10ms) dashboard updates
+app.get('/api/telemetry/stream', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  })
+
+  // Send current telemetry snapshot immediately on connection
+  res.write(`data: ${JSON.stringify(getTelemetryPayload())}\n\n`)
+
+  const onPacket = () => {
+    try {
+      res.write(`data: ${JSON.stringify(getTelemetryPayload())}\n\n`)
+    } catch {}
+  }
+
+  receiverClient.on('packet', onPacket)
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(': keepalive\n\n')
+    } catch {}
+  }, 10000)
+
+  req.on('close', () => {
+    receiverClient.off('packet', onPacket)
+    clearInterval(heartbeat)
+  })
+})
+
+app.get('/api/telemetry/latest', (_req, res) => {
+  const { status, latestEnvelope, normalized } = receiverClient.getLatestData()
+  res.json({
+    success: true,
+    status,
+    data: latestEnvelope ? {
+      packet_id: latestEnvelope.packet_id,
+      rssi: latestEnvelope.rssi,
+      snr: latestEnvelope.snr,
+      telemetry: latestEnvelope.telemetry,
+      received_at: normalized?.receivedAt || null,
+      stale: status.stale,
+    } : null,
+  })
+})
+
+app.get('/api/telemetry/status', (_req, res) => {
+  const status = receiverClient.getStatus()
+  res.json({
+    success: true,
+    ...status,
+    simulationMode: process.env.SIMULATION_MODE === 'true',
+  })
+})
+
+app.get('/api/telemetry/history', asyncRoute(async (req, res) => {
+  const limit = Math.min(Math.max(1, parseInt(req.query.limit, 10) || 50), 200)
+
+  try {
+    const result = await pool.query(
+      'SELECT id, packet_id AS "packetId", rssi, snr, payload, source, created_at AS "createdAt" FROM telemetry_history ORDER BY created_at DESC LIMIT $1',
+      [limit]
+    )
+    if (result.rowCount > 0) {
+      return res.json({
+        success: true,
+        count: result.rowCount,
+        data: result.rows.reverse(),
+      })
+    }
+  } catch (err) {
+    console.warn(`[TELEMETRY] Falling back to in-memory history: ${err.message}`)
+  }
+
+  const buffer = receiverClient.getRecentReadings(limit)
+  res.json({
+    success: true,
+    count: buffer.length,
+    data: buffer,
+  })
+}))
 app.get('/api/regions', asyncRoute(async (_req,res) => {
   const result=await pool.query('SELECT region, count(*)::int AS "machineCount" FROM machines GROUP BY region ORDER BY region')
   res.json({success:true,data:result.rows})
@@ -260,8 +434,19 @@ async function ensureDefaultSuperAdmin() {
 const port = Number(process.env.PORT || 1000)
 runMigrations(pool)
   .then(() => ensureDefaultSuperAdmin())
-  .then(() => app.listen(port, '0.0.0.0', () => console.log(`EREBUS API listening on ${port}`)))
+  .then(() => {
+    receiverClient.start()
+    app.listen(port, '0.0.0.0', () => console.log(`EREBUS API listening on ${port}`))
+  })
   .catch((error) => {
     console.error('API startup failed', error)
     process.exit(1)
   })
+
+const shutdown = () => {
+  console.log('[API] Gracefully shutting down...')
+  receiverClient.close()
+  process.exit(0)
+}
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)

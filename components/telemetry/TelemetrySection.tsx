@@ -28,67 +28,104 @@ export default function TelemetrySection({
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-card-label">
-            ORBITAL VELOCITY <Rocket style={{ width: 16, color: '#2563eb' }} />
+            VELOCITY <Rocket style={{ width: 16, color: '#2563eb' }} />
           </div>
           <div className="stat-card-val">
-            {telemetry?.orbitalPhysics?.velocityKmS || 7.68} km/s
+            {telemetry?.sensorReadings?.speedKmh !== null && telemetry?.sensorReadings?.speedKmh !== undefined
+              ? `${telemetry.sensorReadings.speedKmh} km/h`
+              : telemetry?.orbitalPhysics?.velocityKmS !== null && telemetry?.orbitalPhysics?.velocityKmS !== undefined
+              ? `${telemetry.orbitalPhysics.velocityKmS} km/s`
+              : 'Unavailable'}
           </div>
-          <div className="stat-card-sub">27,600 km/h ground track</div>
+          <div className="stat-card-sub">
+            {telemetry?.sensorReadings?.speedKmh !== null && telemetry?.sensorReadings?.speedKmh !== undefined
+              ? 'GPS ground speed'
+              : 'Telemetry track'}
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-label">
             ALTITUDE <Globe2 style={{ width: 16, color: '#0284c7' }} />
           </div>
           <div className="stat-card-val">
-            {telemetry?.orbitalPhysics?.altitudeKm || 412} km
+            {telemetry?.sensorReadings?.altitudeMeters !== null && telemetry?.sensorReadings?.altitudeMeters !== undefined
+              ? `${telemetry.sensorReadings.altitudeMeters} m`
+              : telemetry?.orbitalPhysics?.altitudeKm !== null && telemetry?.orbitalPhysics?.altitudeKm !== undefined
+              ? `${telemetry.orbitalPhysics.altitudeKm} km`
+              : 'Unavailable'}
           </div>
-          <div className="stat-card-sub">Low Earth Orbit (LEO)</div>
+          <div className="stat-card-sub">
+            {telemetry?.sensorReadings?.altitudeMeters !== null ? 'BMP280 Barometric formula' : 'Orbital altitude'}
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-label">
-            SOLAR GENERATION <Zap style={{ width: 16, color: '#d97706' }} />
+            LORA SIGNAL <Zap style={{ width: 16, color: '#d97706' }} />
           </div>
           <div className="stat-card-val">
-            {telemetry?.powerAndThermal?.solarPowerOutputMw || 14.2} MW
+            {telemetry?.rssi !== null && telemetry?.rssi !== undefined ? `${telemetry.rssi} dBm` : 'Unavailable'}
           </div>
-          <div className="stat-card-sub">Gallium Arsenide Arrays</div>
+          <div className="stat-card-sub">
+            {telemetry?.snr !== null && telemetry?.snr !== undefined ? `SNR: ${telemetry.snr} dB` : 'LoRa 433 MHz link'}
+          </div>
         </div>
         <div className="stat-card">
           <div className="stat-card-label">
-            SHIELD INTEGRITY <ShieldCheck style={{ width: 16, color: '#10b981' }} />
+            SHIELD & ACCEL <ShieldCheck style={{ width: 16, color: '#10b981' }} />
           </div>
           <div className="stat-card-val">
-            {telemetry?.environmentalShielding?.shieldIntegrityPercent || 99.4}%
+            {telemetry?.sensorReadings?.gForce !== null && telemetry?.sensorReadings?.gForce !== undefined
+              ? `${telemetry.sensorReadings.gForce} g`
+              : telemetry?.environmentalShielding?.shieldIntegrityPercent !== null && telemetry?.environmentalShielding?.shieldIntegrityPercent !== undefined
+              ? `${telemetry.environmentalShielding.shieldIntegrityPercent}%`
+              : 'Unavailable'}
           </div>
-          <div className="stat-card-sub">Cosmic Radiation Nominal</div>
+          <div className="stat-card-sub">
+            {telemetry?.sensorReadings?.gForce !== null ? 'MPU6050 total g-load' : 'Cosmic Shield'}
+          </div>
         </div>
       </div>
 
       <div className="zentra-hero-grid" style={{ marginTop: 24 }}>
         <div className="card-panel">
           <h3 style={{ marginTop: 0, marginBottom: 16, fontSize: 16, color: '#0f172a' }}>
-            Power & Thermal Core Telemetry
+            Thermal & Environmental Telemetry
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div className="capacity-progress-item">
               <div className="capacity-progress-label">
-                <span>Battery Charge (Li-Ion Space Grade)</span>
-                <strong>{telemetry?.powerAndThermal?.batteryChargePercent || 98}%</strong>
+                <span>Humidity (DHT22)</span>
+                <strong>
+                  {telemetry?.sensorReadings?.humidity !== null && telemetry?.sensorReadings?.humidity !== undefined
+                    ? `${telemetry.sensorReadings.humidity} %`
+                    : 'Unavailable'}
+                </strong>
               </div>
               <div className="striped-progress-bar">
                 <div
                   className="striped-bar-fill striped-green"
-                  style={{ width: `${telemetry?.powerAndThermal?.batteryChargePercent || 98}%` }}
+                  style={{ width: `${Math.min(100, telemetry?.sensorReadings?.humidity ?? 0)}%` }}
                 />
               </div>
             </div>
             <div className="capacity-progress-item">
               <div className="capacity-progress-label">
-                <span>Thermal Dissipation (420 kW)</span>
-                <strong>{telemetry?.powerAndThermal?.thermalCoreTempC || 32.4} °C</strong>
+                <span>Core Temperature (BMP280 / DHT22)</span>
+                <strong>
+                  {telemetry?.sensorReadings?.temperature !== null && telemetry?.sensorReadings?.temperature !== undefined
+                    ? `${telemetry.sensorReadings.temperature} °C`
+                    : telemetry?.powerAndThermal?.thermalCoreTempC !== null && telemetry?.powerAndThermal?.thermalCoreTempC !== undefined
+                    ? `${telemetry.powerAndThermal.thermalCoreTempC} °C`
+                    : 'Unavailable'}
+                </strong>
               </div>
               <div className="striped-progress-bar">
-                <div className="striped-bar-fill striped-blue" style={{ width: '65%' }} />
+                <div
+                  className="striped-bar-fill striped-blue"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, (telemetry?.sensorReadings?.temperature ?? telemetry?.powerAndThermal?.thermalCoreTempC ?? 0) * 2))}%`,
+                  }}
+                />
               </div>
             </div>
           </div>
